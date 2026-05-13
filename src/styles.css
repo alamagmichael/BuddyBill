@@ -150,6 +150,7 @@ a {
 
 .hero-copy p,
 .signup-card p,
+.signup-message,
 .split-card p {
   color: #55706f;
   font-size: 1.08rem;
@@ -324,6 +325,17 @@ a {
 
 .signup-form {
   grid-template-columns: 1fr 1fr auto;
+}
+
+.signup-message {
+  background: rgba(41, 117, 109, 0.1);
+  border-radius: 16px;
+  color: #29756d;
+  font-size: 0.95rem;
+  font-weight: 800;
+  grid-column: 2;
+  margin: 0;
+  padding: 12px 14px;
 }
 
 label,
@@ -584,6 +596,10 @@ legend {
   .split-grid {
     grid-template-columns: 1fr 1fr;
   }
+
+  .signup-message {
+    grid-column: 1;
+  }
 }
 
 @media (max-width: 680px) {
@@ -624,6 +640,10 @@ legend {
   .stats-grid,
   .split-grid {
     grid-template-columns: 1fr;
+  }
+
+  .signup-message {
+    grid-column: 1;
   }
 
   .section-heading {

@@ -14,6 +14,8 @@ const checks = [
   ['Main script', html.includes('src/main.js')],
   ['Group creation', js.includes('function addGroup')],
   ['Expense creation', js.includes('function addExpense')],
+  ['Signup creation', js.includes('function signUp')],
+  ['Local persistence', js.includes('localStorage')],
   ['Receipt attachment', js.includes('receiptUpload')],
   ['Responsive styles', css.includes('@media (max-width: 680px)')],
 ];

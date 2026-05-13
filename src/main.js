@@ -5,7 +5,7 @@ const splitModes = [
   { mode: 'Adjustment', description: 'Add credits, caps, discounts, or manual tweaks.' },
 ];
 
-const groups = [
+const initialGroups = [
   {
     name: 'Lisbon Trip',
     icon: '✈️',
@@ -36,9 +36,16 @@ const groups = [
   },
 ];
 
-let activeGroupIndex = 0;
+const STORAGE_KEY = 'buddybill-state-v1';
+
+const storedState = loadState();
+let groups = Array.isArray(storedState.groups) && storedState.groups.length > 0 ? storedState.groups : initialGroups;
+let users = Array.isArray(storedState.users) ? storedState.users : [];
+let currentUser = storedState.currentUser ?? null;
+let activeGroupIndex = Math.min(Math.max(storedState.activeGroupIndex ?? 0, 0), groups.length - 1);
 let selectedSplitMode = 'Exact';
 let receiptFileName = '';
+let signupMessage = '';
 
 const currency = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 const root = document.querySelector('#root');
@@ -48,6 +55,52 @@ function escapeHtml(value) {
     const entities = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', "'": '&#039;' };
     return entities[character];
   });
+}
+
+function loadState() {
+  const fallback = { groups: null, users: [], currentUser: null, activeGroupIndex: 0 };
+
+  if (typeof localStorage === 'undefined') {
+    return fallback;
+  }
+
+  const savedState = localStorage.getItem(STORAGE_KEY);
+
+  if (!savedState) {
+    return fallback;
+  }
+
+  try {
+    return JSON.parse(savedState);
+  } catch {
+    localStorage.removeItem(STORAGE_KEY);
+    return fallback;
+  }
+}
+
+function saveState() {
+  if (typeof localStorage === 'undefined') {
+    return;
+  }
+
+  localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify({
+      groups,
+      users,
+      currentUser,
+      activeGroupIndex,
+    }),
+  );
+}
+
+function getInitials(name) {
+  return name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0].toUpperCase())
+    .join('') || 'BB';
 }
 
 function calculateTotals() {
@@ -67,12 +120,13 @@ function addGroup() {
     name: `New group ${nextNumber}`,
     icon: '🤝',
     members: [
-      { name: 'You', avatar: 'YO' },
+      currentUser ? { name: currentUser.name, avatar: currentUser.avatar } : { name: 'You', avatar: 'YO' },
       { name: 'Friend', avatar: 'FR' },
     ],
     expenses: [],
   });
   activeGroupIndex = groups.length - 1;
+  saveState();
   render();
 }
 
@@ -93,7 +147,7 @@ function addExpense(event) {
   activeGroup.expenses.unshift({
     title,
     amount,
-    paidBy: activeGroup.members[0]?.name ?? 'You',
+    paidBy: currentUser?.name ?? activeGroup.members[0]?.name ?? 'You',
     mode: selectedSplitMode,
     receipt: receiptFileName || undefined,
   });
@@ -101,6 +155,47 @@ function addExpense(event) {
   titleInput.value = '';
   amountInput.value = '';
   receiptFileName = '';
+  saveState();
+  render();
+}
+
+
+function signUp(event) {
+  event.preventDefault();
+
+  const form = event.currentTarget;
+  const nameInput = form.querySelector('#signup-name');
+  const emailInput = form.querySelector('#signup-email');
+  const name = nameInput.value.trim();
+  const email = emailInput.value.trim().toLowerCase();
+
+  if (!name || !email) {
+    signupMessage = 'Enter your name and email to create a BuddyBill account on this device.';
+    render();
+    return;
+  }
+
+  const user = { name, email, avatar: getInitials(name) };
+  const existingUserIndex = users.findIndex((savedUser) => savedUser.email === email);
+
+  if (existingUserIndex >= 0) {
+    users[existingUserIndex] = user;
+    signupMessage = `Welcome back, ${name}. Your local BuddyBill account is active.`;
+  } else {
+    users.push(user);
+    signupMessage = `Account created for ${name}. You were added to ${groups[activeGroupIndex].name}.`;
+  }
+
+  currentUser = user;
+
+  const activeGroup = groups[activeGroupIndex];
+  const alreadyInGroup = activeGroup.members.some((member) => member.name === name);
+
+  if (!alreadyInGroup) {
+    activeGroup.members.unshift({ name, avatar: user.avatar });
+  }
+
+  saveState();
   render();
 }
 
@@ -163,11 +258,14 @@ function render() {
           <h2 id="signup-title">People can sign up and join groups in seconds.</h2>
           <p>Use this starter flow as a foundation for email, phone, or social authentication.</p>
         </div>
-        <form class="signup-form">
-          <label>Full name<input type="text" placeholder="Alex Chen" /></label>
-          <label>Email<input type="email" placeholder="alex@example.com" /></label>
-          <button type="button">Create account</button>
+        <form class="signup-form" id="signup-form">
+          <label>Full name<input id="signup-name" type="text" placeholder="Alex Chen" value="${escapeHtml(currentUser?.name ?? '')}" /></label>
+          <label>Email<input id="signup-email" type="email" placeholder="alex@example.com" value="${escapeHtml(currentUser?.email ?? '')}" /></label>
+          <button type="submit">${currentUser ? 'Update account' : 'Create account'}</button>
         </form>
+        <p class="signup-message" role="status">
+          ${escapeHtml(signupMessage || (currentUser ? `Signed in locally as ${currentUser.name}.` : 'Prototype signup stores your account in this browser.'))}
+        </p>
       </section>
 
       <section class="dashboard-grid" id="groups">
@@ -288,6 +386,7 @@ function expenseItem(expense) {
 
 function bindEvents() {
   document.querySelector('#add-group').addEventListener('click', addGroup);
+  document.querySelector('#signup-form').addEventListener('submit', signUp);
   document.querySelector('#new-expense-form').addEventListener('submit', addExpense);
 
   document.querySelectorAll('[data-group-index]').forEach((button) => {
